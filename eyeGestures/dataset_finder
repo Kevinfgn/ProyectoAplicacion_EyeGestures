@@ -1,0 +1,35 @@
+import os
+import pandas as pd
+import kagglehub
+
+def inspect_eye_movement_dataset():
+    path = kagglehub.dataset_download("namratasri01/eye-movement-data-set-for-desktop-activities")
+    print("Ruta base del dataset:", path)
+    print("\nArchivos encontrados:\n")
+
+    found_csv = False
+
+    # Recorre todas las subcarpetas
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith(".csv"):
+                csv_path = os.path.join(root, file)
+                found_csv = True
+                print(f"Archivo: {csv_path}")
+
+                # Intentamos leer solo las primeras filas para inspeccionar columnas
+                try:
+                    df = pd.read_csv(csv_path, encoding="utf-8")
+                except UnicodeDecodeError:
+                    df = pd.read_csv(csv_path, encoding="latin-1")
+
+                print("Columnas detectadas:", list(df.columns))
+                print("Primeras filas:")
+                print(df.head(3))
+                print("-" * 60)
+
+    if not found_csv:
+        print("No se encontraron archivos CSV en el dataset.")
+
+if __name__ == "__main__":
+    inspect_eye_movement_dataset()
