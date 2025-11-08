@@ -1,0 +1,82 @@
+import os
+import pandas as pd
+import numpy as np
+import pickle
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+import kagglehub
+
+def load_eye_movement_dataset():
+    """
+    Carga todos los archivos CSV del dataset 'eye-movement-data-set-for-desktop-activities'.
+    Retorna matrices X (features) e y (labels).
+    """
+    path = kagglehub.dataset_download("namratasri01/eye-movement-data-set-for-desktop-activities")
+    print("Ruta base del dataset:", path)
+
+    data = []
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.endswith(".csv"):
+                csv_path = os.path.join(root, file)
+                try:
+                    df = pd.read_csv(csv_path, encoding="utf-8")
+                except UnicodeDecodeError:
+                    df = pd.read_csv(csv_path, encoding="latin-1")
+
+                # Aseguramos nombres de columnas correctos
+                if {'x', 'y', 'timestamp', 'activity'}.issubset(df.columns):
+                    # Normalizar coordenadas
+                    df['x_norm'] = df['x'] / df['x'].max()
+                    df['y_norm'] = df['y'] / df['y'].max()
+
+                    # Codificar actividad como número
+                    df['activity_code'] = df['activity'].astype('category').cat.codes
+
+                    # Features (entrada del modelo)
+                    X = df[['x_norm', 'y_norm', 'activity_code', 'timestamp']].values
+
+                    # Etiquetas (posiciones reales en pantalla)
+                    y = df[['x', 'y']].values
+
+                    data.append((X, y))
+
+    if not data:
+        raise FileNotFoundError("No se encontraron archivos CSV válidos en el dataset.")
+
+    # Combinar todos los datos
+    X = np.vstack([d[0] for d in data])
+    y = np.vstack([d[1] for d in data])
+
+    print(f"Dataset cargado con {X.shape[0]} muestras y {X.shape[1]} caracteristicas.")
+    return X, y
+
+
+def train_and_save_model():
+    """Entrena el modelo de calibración y guarda los pesos como modelo.pkl"""
+    X, y = load_eye_movement_dataset()
+
+    # División en entrenamiento y prueba
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Entrenamos dos regresores (uno para X, otro para Y)
+    model_x = LinearRegression()
+    model_y = LinearRegression()
+
+    model_x.fit(X_train, y_train[:, 0])
+    model_y.fit(X_train, y_train[:, 1])
+
+    # Evaluación
+    score_x = model_x.score(X_test, y_test[:, 0])
+    score_y = model_y.score(X_test, y_test[:, 1])
+    print(f"Precision del modelo (X): {score_x:.4f}")
+    print(f"Precision del modelo (Y): {score_y:.4f}")
+
+    # Guardar modelo
+    model = {"model_x": model_x, "model_y": model_y}
+    with open("calibration_model.pkl", "wb") as f:
+        pickle.dump(model, f)
+    print("Modelo guardado como 'calibration_model.pkl'")
+
+if __name__ == "__main__":
+    train_and_save_model()
